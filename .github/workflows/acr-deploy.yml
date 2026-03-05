@@ -1,0 +1,61 @@
+name: Build and push image to Azure Container Registry
+
+on:
+  push:
+    branches: ["main"]
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Log in to Azure using a service principal stored as JSON in a GitHub secret.
+      # Create secret AZURE_CREDENTIALS with the output of:
+        # az ad sp create-for-rbac --name "techWorkshopSP" --role contributor \
+        #   --scopes /subscriptions/a9e0292c-3bd3-43bf-b687-84e44552bdf2/resourceGroups/techworkshop-l300-ai-agents-3 \
+        #   --sdk-auth
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      # Login to ACR (needs ACR_NAME secret, e.g. "myregistry")
+      - name: ACR login
+        run: az acr login --name "${{ secrets.ACR_NAME }}"
+
+      # Build context is src/ so ONLY files in src/ are sent to the Docker build.
+      # Dockerfile is src/Dockerfile (referenced relative to repo root).
+      - name: Build and push
+        env:
+          ACR_NAME: ${{ secrets.ACR_NAME }}
+          IMAGE_NAME: ${{ secrets.IMAGE_NAME }} # e.g. "techworkshop-app" (create this secret)
+          ENV_FILE_CONTENTS: ${{ secrets.ENV }}
+        run: |
+          set -euo pipefail
+
+          LOGIN_SERVER="$(az acr show -n "$ACR_NAME" --query loginServer -o tsv)"
+          IMAGE="$LOGIN_SERVER/$IMAGE_NAME"
+          TAG="${GITHUB_SHA}"
+
+          # Create the .env inside src/ for the build (DO NOT COMMIT this file).
+          # This file exists only on the GitHub runner during the build.
+          printf "%s" "$ENV_FILE_CONTENTS" > src/.env
+
+          # Build using src/ as context so only src contents are included.
+          docker build \
+            -f src/Dockerfile \
+            -t "$IMAGE:$TAG" \
+            -t "$IMAGE:latest" \
+            src
+
+          docker push "$IMAGE:$TAG"
+          docker push "$IMAGE:latest"
+
+          # Cleanup best-effort
+          rm -f src/.env
