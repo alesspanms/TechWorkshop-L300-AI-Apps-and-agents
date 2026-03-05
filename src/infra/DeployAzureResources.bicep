@@ -46,10 +46,18 @@ var locations = [
   }
 ]
 
+var locations2 = [
+  {
+    locationName: 'swedencentral'
+    failoverPriority: 0
+    isZoneRedundant: false
+  }
+]
+
 @description('Creates an Azure Cosmos DB NoSQL account.')
 resource cosmosDbAccount 'Microsoft.DocumentDB/databaseAccounts@2023-04-15' = {
   name: cosmosDbName
-  location: location
+  location: 'swedencentral'
   identity: {
     type: 'SystemAssigned'
   }
@@ -64,7 +72,7 @@ resource cosmosDbAccount 'Microsoft.DocumentDB/databaseAccounts@2023-04-15' = {
       defaultConsistencyLevel: 'Session'
     }
     databaseAccountOfferType: 'Standard'
-    locations: locations
+    locations: locations2
     disableLocalAuth: false
   }
   tags: tags
